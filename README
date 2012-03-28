@@ -1,0 +1,21 @@
+This is just a small utility (written in Ruby) and a few shell scripts to
+enable data from Fronius PV inverters to be logged and then sent to
+pvoutput.org for display.
+
+It relies on the Fslurp utility, written by David Stone and available for
+download from Sourceforge.
+
+http://fslurp.sourceforge.net/
+
+The scripts are designed to be run on a small Linux box.  I use a SheevaPlug
+running Debian Squeeze, but it seems an obvious job for a RaspberryPi when
+the rush dies down.
+
+You can install the scripts where you like, although /usr/local/bin seems
+an obvious place.  You also need to set up a couple of cron jobs, and a
+sample cron file is provided.  You can change the intervals to suit yourself,
+but I find those given work well.
+
+John Winters
+john@sinodun.org.uk
+28th March, 2012
