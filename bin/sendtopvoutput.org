@@ -1,0 +1,8 @@
+#!/bin/bash
+
+. /usr/local/etc/processpv.cfg
+
+#  Avoid error messages.  Don't run if the file doesn't exist yet.
+if [ -f $PVDATADIR/$PVFILENAME ] ; then
+  /usr/local/bin/processpv.rb --date=$DATE --id=$PVID --key=$PVKEY --send --quiet $PVDATADIR/$PVFILENAME
+fi
