@@ -1,0 +1,76 @@
+To use this utility you need a Fronius PV inverter with an RS-232 card.
+This is the "Fronius Interface Card easy" which should be available
+from wherever you got your inverter.
+
+http://www.fronius.com/cps/rde/xchg/SID-C46941A8-5BC164B9/fronius_international/hs.xsl/83_16258_ENG_HTML.htm
+
+You'll also need a serial null-modem cable and perhaps a USB<=>RS232
+converter lead (if we assume you're using something like a SheevaPlug,
+which doesn't have an RS232 port).
+
+Connect up the Fronius to a suitable serial port on your computer and
+take note of which serial port this is (e.g. /dev/ttyUSB0)
+
+Download and compile the Fslurp utility from:
+
+http://fslurp.sourceforge.net/
+
+Install the binary in /usr/local/bin.  You'll need to give yourself
+permission to access the serial port.  On Debian you can do this with:
+
+  sudo adduser <your user name> dialout
+
+You'll then need to log out and back in again to get the upgraded
+permission.
+
+Test the basic configuration with the following command:
+
+  fslurp -p /dev/ttyUSB0 -r all
+
+and you should see all the current readings from your inverter.  Note that
+if it's dark the inverter goes completely to sleep and you'll get a message
+about "No active inverter found".  If the inverter is just waking up you'll
+get a lot of values reading "overflow".  Once you have enough sun to be
+generating power you should get a full set of readings.
+
+
+Once you've got fslurp working you need to decide where you want your
+data files to go.  Anywhere will do - just create a directory in your
+chosen location.
+
+Copy all the files from the "bin" directory in this software distribution
+to /usr/local/bin, and all the files from the "etc" directory to
+/usr/local/etc.
+
+Now you need to visit http://pvoutput.org/ and register your system.
+You will be allocated a system id.  At the bottom of your Account Settings
+page, you'll find a section headed "API Settings".  Change "API Access"
+here to "Enabled" and click the "New Key" button to generate an API Key.
+Copy this API Key - be aware that it's actually slightly longer than
+the field so you need to make sure you select the whole key - and save
+it.
+
+Now edit /usr/local/etc/processpv.cfg.  You need to set the following
+variables:
+
+PVPORT          The serial port to which your inverter is connected
+PVDATADIR       The directory where you want the data files
+PVID            Your system id from pvoutput.org
+PVKEY           Your API Key from pvoutput.org
+
+And a bit of luck things should now be ready to work.  Try executing
+/usr/local/bin/slurptocsv.  That should take a current set of readings
+from your inverter and save them to your data directory.  Then
+try typing:
+
+  processpv.rb <name of data file>
+
+and you should see some stats about your output.
+
+Finally you need to set up cron to run your scripts regularly.  There's
+a sample crontab supplied, and if you want to use that (and don't already
+have any cron jobs set up) you just need to type:
+
+  crontab crontab
+
+and it will be installed on your system.
