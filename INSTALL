@@ -55,6 +55,7 @@ variables:
 
 PVPORT          The serial port to which your inverter is connected
 PVDATADIR       The directory where you want the data files
+PVDEDUCT        How many watts to deduct from each reading
 PVID            Your system id from pvoutput.org
 PVKEY           Your API Key from pvoutput.org
 

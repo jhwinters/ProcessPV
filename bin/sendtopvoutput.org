@@ -4,5 +4,5 @@
 
 #  Avoid error messages.  Don't run if the file doesn't exist yet.
 if [ -f $PVDATADIR/$PVFILENAME ] ; then
-  /usr/local/bin/processpv.rb --date=$DATE --id=$PVID --key=$PVKEY --send --quiet $PVDATADIR/$PVFILENAME
+  /usr/local/bin/processpv.rb --date=$DATE --id=$PVID --key=$PVKEY --deduct=$PVDEDUCT --send --quiet $PVDATADIR/$PVFILENAME
 fi

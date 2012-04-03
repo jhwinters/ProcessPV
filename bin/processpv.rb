@@ -23,6 +23,7 @@ require 'uri'
 
 bequiet     = false
 datadate    = nil
+deductwatts = 0
 listoutages = false
 senddata    = false
 shortoutput = false
@@ -39,6 +40,10 @@ end
 
 opts.on("-d", "--date YYYYMMDD", "Specify the effective date for the data") do |date|
   datadate  = date
+end
+
+opts.on("--deduct WATTS", "Reduce each individual reading by WATTS") do |watts|
+  deductwatts = watts.to_i
 end
 
 opts.on("-i", "--id ID", "Specify the pvoutput.org system id") do |id|
@@ -100,11 +105,16 @@ end
 
 class Reading
 
-  attr_reader :time, :powernow, :voltagenow
+  attr_reader :time, :powernow, :voltagenow, :rawpower
 
-  def initialize(row)
+  def initialize(row, deductwatts)
     @time = Time.parse(row[0])
-    @powernow   = row[5].to_i
+    @rawpower   = row[5].to_i
+    if @rawpower > deductwatts
+      @powernow   = @rawpower - deductwatts
+    else
+      @powernow   = 0
+    end
     @voltagenow = row[7].to_i
   end
 
@@ -122,12 +132,13 @@ class ReadingSet < Array
 
   attr_reader :outage_count, :outage_times
 
-  def initialize
+  def initialize(deductwatts)
     # Don't count warm-up as an outage.
     @outage_count = -1
     @outage_times = Array.new
     @in_outage    = true
-    super
+    @deductwatts  = deductwatts
+    super()
   end
 
   def add_reading(row)
@@ -141,7 +152,7 @@ class ReadingSet < Array
         @in_outage = false
         @outage_count += 1
       end
-      self << Reading.new(row)
+      self << Reading.new(row, @deductwatts)
     end
   end
 
@@ -181,7 +192,8 @@ class ReadingSet < Array
     #  of a whole lot of rectangles.
     #
 #    puts "Apparent interval = #{apparent_interval}"
-    sum_readings = self.inject(0) {|sum, reading| sum + reading.powernow}
+    sum_readings = self.inject(0) {|sum, reading|
+                                   sum + reading.powernow}
 #    puts "Sum of readings = #{sum_readings}"
     (sum_readings * apparent_interval) / 60
   end
@@ -242,8 +254,8 @@ class ReadingSet < Array
     self
   end
 
-  def self.read_csv_file(filename)
-    ReadingSet.new.read_csv_file(filename)
+  def self.read_csv_file(filename, deductwatts)
+    ReadingSet.new(deductwatts).read_csv_file(filename)
   end
 
 end
@@ -252,7 +264,7 @@ if shortoutput
   puts "Date     Start    End      Max    At       Readings Total    Outages"
 end
 rest.each do |filename|
-  readings = ReadingSet.read_csv_file(filename)
+  readings = ReadingSet.read_csv_file(filename, deductwatts)
   if readings.size > 0
     if listoutages
       if readings.outage_count > 0
