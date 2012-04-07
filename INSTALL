@@ -75,3 +75,10 @@ have any cron jobs set up) you just need to type:
   crontab crontab
 
 and it will be installed on your system.
+
+A word about PVDEDUCT.  It appears that the Fronius inverter reports the
+wattage which it is generating, before it uses some of that wattage to
+power its own internals.  As a result, the total kWh figure at the end of the
+day consistently disagrees with the figure given by the official calibrated
+meter in the installation.  If find thay by setting PVDEDUCT to 30 (Watts), I
+can get the two to agree pretty closely.  YMMV.
