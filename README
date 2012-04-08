@@ -17,6 +17,9 @@ installed in /usr/local/etc.  Changing this is trivial, but is up to you.
 You also need to edit the config file to set your system id and key (from
 pvoutput.org) and to indicate where you want the log files stored.
 
+You can see samples of the sort of graphs available at:
+
+http://pvoutput.org/list.jsp?sid=6542
 
 
 Copyright (C) 2012, John Winters
