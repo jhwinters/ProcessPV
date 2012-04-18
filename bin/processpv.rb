@@ -24,6 +24,7 @@ require 'uri'
 bequiet     = false
 datadate    = nil
 deductwatts = 0
+interval    = 0
 listoutages = false
 senddata    = false
 shortoutput = false
@@ -48,6 +49,10 @@ end
 
 opts.on("-i", "--id ID", "Specify the pvoutput.org system id") do |id|
   systemid  = id
+end
+
+opts.on("--interval INTERVAL", "Explicitly specify the interval (in minutes) between readings.") do |specifiedinterval|
+  interval = specifiedinterval.to_i
 end
 
 opts.on("-o", "--outages", "List outages from the file(s).") do
@@ -130,14 +135,16 @@ end
 
 class ReadingSet < Array
 
-  attr_reader :outage_count, :outage_times
+  attr_reader :outage_count, :outage_times, :apparent_interval
 
-  def initialize(deductwatts)
+  def initialize(deductwatts, interval)
     # Don't count warm-up as an outage.
     @outage_count = -1
     @outage_times = Array.new
     @in_outage    = true
     @deductwatts  = deductwatts
+    @consecutivegoodreadings = 0
+    @apparent_interval = interval
     super()
   end
 
@@ -147,12 +154,18 @@ class ReadingSet < Array
         @in_outage = true
         @outage_times << Time.parse(row[0])
       end
+      @consecutivegoodreadings = 0
     else
       if @in_outage
         @in_outage = false
         @outage_count += 1
       end
       self << Reading.new(row, @deductwatts)
+      @consecutivegoodreadings += 1
+      if @consecutivegoodreadings >= 10 &&
+         @apparent_interval == 0
+        calculate_apparent_interval
+      end
     end
   end
 
@@ -166,36 +179,20 @@ class ReadingSet < Array
 
   #
   #  Calculate the apparent interval, in minutes, between our readings.
-  #  Requires at least 10 readings
+  #  Only called once we have 10 consecutive good readings.  We use the
+  #  last 10 readings in our array.
   #
-  def apparent_interval
-    if self.size < 10
-      0
-    else
-      deltas = Array.new
-      0.upto(8) do |index|
-        deltas[index] = self[index + 1].time - self[index].time
-      end
-      total = deltas.inject(:+)
-      mean = (total / 9).to_i
-      #
-      #  Round to the nearest minute.
-      #
-      (mean + 30) / 60
-    end
-  end
-
   def total_energy
     #
     #  We can't get an accurate figure.  We could attempt to use the
     #  trapezium rule, but for now I'm just taking the sum of the areas
     #  of a whole lot of rectangles.
     #
-#    puts "Apparent interval = #{apparent_interval}"
+#    puts "Apparent interval = #{@apparent_interval}"
     sum_readings = self.inject(0) {|sum, reading|
                                    sum + reading.powernow}
 #    puts "Sum of readings = #{sum_readings}"
-    (sum_readings * apparent_interval) / 60
+    (sum_readings * @apparent_interval) / 60
   end
 
   def do_send(url, systemid, systemkey, data)
@@ -254,8 +251,26 @@ class ReadingSet < Array
     self
   end
 
-  def self.read_csv_file(filename, deductwatts)
-    ReadingSet.new(deductwatts).read_csv_file(filename)
+  def self.read_csv_file(filename, deductwatts, interval)
+    ReadingSet.new(deductwatts, interval).read_csv_file(filename)
+  end
+
+  private
+
+  def calculate_apparent_interval
+    if self.size >= 10
+      deltas = Array.new
+      data = self[-10,10]
+      0.upto(8) do |index|
+        deltas[index] = data[index + 1].time - data[index].time
+      end
+      total = deltas.inject(:+)
+      mean = (total / 9).to_i
+      #
+      #  Round to the nearest minute.
+      #
+      @apparent_interval = (mean + 30) / 60
+    end
   end
 
 end
@@ -264,7 +279,7 @@ if shortoutput
   puts "Date     Start    End      Max    At       Readings Total    Outages"
 end
 rest.each do |filename|
-  readings = ReadingSet.read_csv_file(filename, deductwatts)
+  readings = ReadingSet.read_csv_file(filename, deductwatts, interval)
   if readings.size > 0
     if listoutages
       if readings.outage_count > 0
