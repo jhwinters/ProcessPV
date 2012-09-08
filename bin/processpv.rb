@@ -97,7 +97,11 @@ class Time
   #
   def hhmm_nearest5
     rounded_min = ((min + 2) / 5) * 5
-    sprintf("%02d:%02d", hour, rounded_min)
+    if rounded_min == 60
+      sprintf("%02d:%02d", hour + 1, 0)
+    else
+      sprintf("%02d:%02d", hour, rounded_min)
+    end
   end
 
 end
