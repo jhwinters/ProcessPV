@@ -30,6 +30,7 @@ senddata    = false
 shortoutput = false
 systemid    = nil
 systemkey   = nil
+verbose     = false
 
 opts = OptionParser.new
 opts.banner = "Usage: processpv [file]"
@@ -57,6 +58,10 @@ end
 
 opts.on("-o", "--outages", "List outages from the file(s).") do
   listoutages = true
+end
+
+opts.on("-v", "--verbose", "Be more verbose about what is found.") do
+  verbose = true
 end
 
 opts.on("-k", "--key KEY", "Specify the pvoutput.org system key") do |key|
@@ -137,34 +142,53 @@ class Reading
 
 end
 
+class Outage
+  attr_reader :time, :before, :after
+
+  def initialize(time, before, after)
+    @time   = time
+    @before = before
+    @after  = after
+  end
+end
+
 class ReadingSet < Array
 
-  attr_reader :outage_count, :outage_times, :apparent_interval
+  attr_reader :outages, :apparent_interval
 
   def initialize(deductwatts, interval)
-    # Don't count warm-up as an outage.
-    @outage_count = -1
-    @outage_times = Array.new
+    @outages      = Array.new
+    @outage_time  = nil
     @in_outage    = true
     @deductwatts  = deductwatts
     @consecutivegoodreadings = 0
     @apparent_interval = interval
+    @filename = ""
     super()
   end
 
   def add_reading(row)
+    note_reading = false
     if row[5] == "overflow"
       if !@in_outage
         @in_outage = true
-        @outage_times << Time.parse(row[0])
+        @outage_time = Time.parse(row[0])
       end
       @consecutivegoodreadings = 0
     else
+      reading = Reading.new(row, @deductwatts)
       if @in_outage
         @in_outage = false
-        @outage_count += 1
+        #
+        #  If @outage_time is set then this outage had a start time.
+        #  If not, then this is our first good reading of the day
+        #  and it doesn't count as an outage at all.
+        #
+        if @outage_time
+          @outages << Outage.new(@outage_time, self.last, reading)
+        end
       end
-      self << Reading.new(row, @deductwatts)
+      self << reading
       @consecutivegoodreadings += 1
       if @consecutivegoodreadings >= 10 &&
          @apparent_interval == 0
@@ -179,6 +203,19 @@ class ReadingSet < Array
 
   def min_power
     self.min.powernow
+  end
+
+  #
+  #  Calculate and return the mean voltage from all our readings.
+  #
+  def mean_voltage
+#    self.inject(0.0){|acc, reading| acc + reading.voltagenow} / self.size
+    sum, count = voltage_sum_and_count
+    sum / count
+  end
+
+  def voltage_sum_and_count
+    [self.inject(0.0){|acc, reading| acc + reading.voltagenow}, self.size]
   end
 
   #
@@ -251,6 +288,7 @@ class ReadingSet < Array
         self.add_reading(row)
       end
     end
+    @filename = filename
     # For chaining
     self
   end
@@ -280,18 +318,31 @@ class ReadingSet < Array
 end
 
 if shortoutput
-  puts "Date     Start    End      Max    At       Readings Total    Outages"
+  puts "Date     Start    End      Max    At       Readings Total     MeanV Outages"
 end
+voltage_sum = 0.0
+voltage_count = 0
 rest.each do |filename|
+  if verbose
+    puts "Processing #{filename}"
+  end
   readings = ReadingSet.read_csv_file(filename, deductwatts, interval)
   if readings.size > 0
     if listoutages
-      if readings.outage_count > 0
-        readings.outage_times.each do |ot|
-          puts ot.hhmmss
+      if readings.outages.size > 0
+        readings.outages.each do |outage|
+          if verbose
+            puts "Outage at #{outage.time.hhmmss}"
+            puts "Before: voltage #{outage.before.voltagenow}, wattage #{outage.before.powernow}"
+            puts "After : voltage #{outage.after.voltagenow}, wattage #{outage.after.powernow}"
+          else
+            puts outage.time.hhmmss
+          end
         end
       else
-        puts "No outages."
+        unless bequiet
+          puts "No outages."
+        end
       end
     elsif senddata
       if systemid && systemkey && datadate
@@ -315,8 +366,10 @@ rest.each do |filename|
                  readings.size.fw_str(3)
                }      #{
                  readings.total_energy.fw_str(5)
-               } Wh #{
-                 readings.outage_count
+               } Wh  #{
+                 sprintf("%.1f", readings.mean_voltage)
+               } #{
+                 readings.outages.size
                }"
       else
         puts "Processed     : #{filename}"
@@ -334,10 +387,16 @@ rest.each do |filename|
         puts "First reading : #{readings.first.time.hhmmss} (#{readings.first.powernow} W)"
         puts "Last reading  : #{readings.last.time.hhmmss} (#{readings.last.powernow} W)"
         puts "Total readings: #{readings.size}"
-        puts "Outages       : #{readings.outage_count}"
+        puts "Outages       : #{readings.outages.size}"
       end
     end
+    sum,count = readings.voltage_sum_and_count
+    voltage_sum   += sum
+    voltage_count += count
   else
     puts "#{filename} empty." unless bequiet
   end
+end
+if voltage_count > 0 && shortoutput
+  puts "Overal mean voltage = #{sprintf("%.2f", voltage_sum / voltage_count)}"
 end
