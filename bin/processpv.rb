@@ -23,6 +23,7 @@ require 'uri'
 
 bequiet     = false
 datadate    = nil
+dcvolts     = false
 deductwatts = 0
 interval    = 0
 listoutages = false
@@ -46,6 +47,10 @@ end
 
 opts.on("--deduct WATTS", "Reduce each individual reading by WATTS") do |watts|
   deductwatts = watts.to_i
+end
+
+opts.on("--dcvolts", "Process DC voltage instead of AC voltage") do
+  dcvolts = true
 end
 
 opts.on("-i", "--id ID", "Specify the pvoutput.org system id") do |id|
@@ -121,7 +126,7 @@ class Reading
 
   attr_reader :time, :powernow, :voltagenow, :rawpower
 
-  def initialize(row, deductwatts)
+  def initialize(row, deductwatts, dcvolts)
     @time = Time.parse(row[0])
     @rawpower   = row[5].to_i
     if @rawpower > deductwatts
@@ -129,7 +134,11 @@ class Reading
     else
       @powernow   = 0
     end
-    @voltagenow = row[7].to_i
+    if dcvolts
+      @voltagenow = row[10].to_i
+    else
+      @voltagenow = row[7].to_i
+    end
   end
 
   def to_s
@@ -156,10 +165,11 @@ class ReadingSet < Array
 
   attr_reader :outages, :apparent_interval
 
-  def initialize(deductwatts, interval)
+  def initialize(deductwatts, interval, dcvolts)
     @outages      = Array.new
     @outage_time  = nil
     @in_outage    = true
+    @dcvolts      = dcvolts
     @deductwatts  = deductwatts
     @consecutivegoodreadings = 0
     @apparent_interval = interval
@@ -176,7 +186,7 @@ class ReadingSet < Array
       end
       @consecutivegoodreadings = 0
     else
-      reading = Reading.new(row, @deductwatts)
+      reading = Reading.new(row, @deductwatts, @dcvolts)
       if @in_outage
         @in_outage = false
         #
@@ -293,8 +303,8 @@ class ReadingSet < Array
     self
   end
 
-  def self.read_csv_file(filename, deductwatts, interval)
-    ReadingSet.new(deductwatts, interval).read_csv_file(filename)
+  def self.read_csv_file(filename, deductwatts, interval, dcvolts)
+    ReadingSet.new(deductwatts, interval, dcvolts).read_csv_file(filename)
   end
 
   private
@@ -326,7 +336,7 @@ rest.each do |filename|
   if verbose
     puts "Processing #{filename}"
   end
-  readings = ReadingSet.read_csv_file(filename, deductwatts, interval)
+  readings = ReadingSet.read_csv_file(filename, deductwatts, interval, dcvolts)
   if readings.size > 0
     if listoutages
       if readings.outages.size > 0
